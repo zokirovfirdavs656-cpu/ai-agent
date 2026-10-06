@@ -783,8 +783,120 @@ async def chat(payload: ChatInput, session: str | None = Cookie(default=None)):
         )
     text = "".join(part.get("text", "") for part in candidates[0].get("content", {}).get("parts", []))
     add_usage(user["id"])
+
+    if payload.conversation_id:
+        now = int(time.time())
+        files_json = json.dumps([a.name for a in payload.attachments]) if payload.attachments else "[]"
+        if payload.file_data and payload.file_type:
+            files_json = json.dumps([payload.attachment_name or "file"])
+        with db() as connection:
+            connection.execute(
+                "INSERT INTO conversation_messages (conversation_id, role, content, files_json, created_at) VALUES (?, ?, ?, ?, ?)",
+                (payload.conversation_id, "user", payload.prompt, files_json, now)
+            )
+            connection.execute(
+                "INSERT INTO conversation_messages (conversation_id, role, content, files_json, created_at) VALUES (?, ?, ?, ?, ?)",
+                (payload.conversation_id, "assistant", text, "[]", now)
+            )
+            connection.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now, payload.conversation_id))
+            connection.commit()
+
     return {
         "text": text.strip() or "Javob olinmadi.",
         "used_today": usage_today(user["id"]),
         "daily_limit": DAILY_MESSAGE_LIMIT,
     }
+
+# --- Conversations -----------------------------------------------------------
+
+@app.get("/api/conversations")
+async def get_conversations(session: str | None = Cookie(default=None)):
+    user = session_user(session)
+    if not user:
+        raise HTTPException(401, "Tizimga kiring.")
+    with db() as connection:
+        rows = connection.execute(
+            "SELECT id, title, updated_at FROM conversations WHERE user_id=? ORDER BY updated_at DESC", 
+            (user["id"],)
+        ).fetchall()
+    return {"conversations": [dict(r) for r in rows]}
+
+@app.post("/api/conversations")
+async def create_conversation(payload: ConversationInput, session: str | None = Cookie(default=None)):
+    user = session_user(session)
+    if not user:
+        raise HTTPException(401, "Tizimga kiring.")
+    now = int(time.time())
+    with db() as connection:
+        cursor = connection.execute(
+            "INSERT INTO conversations (user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            (user["id"], payload.title, now, now)
+        )
+        conv_id = cursor.lastrowid
+        connection.commit()
+    return {"conversation": {"id": conv_id, "title": payload.title}}
+
+@app.get("/api/conversations/{conv_id}")
+async def get_conversation(conv_id: int, session: str | None = Cookie(default=None)):
+    user = session_user(session)
+    if not user:
+        raise HTTPException(401, "Tizimga kiring.")
+    with db() as connection:
+        conv = connection.execute(
+            "SELECT * FROM conversations WHERE id=? AND user_id=?", 
+            (conv_id, user["id"])
+        ).fetchone()
+        if not conv:
+            raise HTTPException(404, "Suhbat topilmadi.")
+        messages = connection.execute(
+            "SELECT * FROM conversation_messages WHERE conversation_id=? ORDER BY id ASC",
+            (conv_id,)
+        ).fetchall()
+    return {
+        "id": conv_id,
+        "title": conv["title"],
+        "messages": [
+            {
+                "id": m["id"],
+                "role": m["role"],
+                "content": m["content"],
+                "files_json": json.loads(m["files_json"]) if m["files_json"] else []
+            } for m in messages
+        ]
+    }
+
+@app.patch("/api/conversations/{conv_id}")
+async def update_conversation(conv_id: int, payload: ConversationTitleInput, session: str | None = Cookie(default=None)):
+    user = session_user(session)
+    if not user:
+        raise HTTPException(401, "Tizimga kiring.")
+    with db() as connection:
+        conv = connection.execute(
+            "SELECT id FROM conversations WHERE id=? AND user_id=?", 
+            (conv_id, user["id"])
+        ).fetchone()
+        if not conv:
+            raise HTTPException(404, "Suhbat topilmadi.")
+        connection.execute(
+            "UPDATE conversations SET title=?, updated_at=? WHERE id=?",
+            (payload.title, int(time.time()), conv_id)
+        )
+        connection.commit()
+    return {"message": "Suhbat nomi yangilandi."}
+
+@app.delete("/api/conversations/{conv_id}")
+async def delete_conversation(conv_id: int, session: str | None = Cookie(default=None)):
+    user = session_user(session)
+    if not user:
+        raise HTTPException(401, "Tizimga kiring.")
+    with db() as connection:
+        conv = connection.execute(
+            "SELECT id FROM conversations WHERE id=? AND user_id=?", 
+            (conv_id, user["id"])
+        ).fetchone()
+        if not conv:
+            raise HTTPException(404, "Suhbat topilmadi.")
+        connection.execute("DELETE FROM conversations WHERE id=?", (conv_id,))
+        connection.execute("DELETE FROM conversation_messages WHERE conversation_id=?", (conv_id,))
+        connection.commit()
+    return {"message": "Suhbat o'chirildi."}
