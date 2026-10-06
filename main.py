@@ -454,17 +454,21 @@ def google_ready() -> bool:
 
 @app.get("/")
 async def index():
+    if (ROOT / "dist" / "index.html").exists():
+        return FileResponse(ROOT / "dist" / "index.html")
     return FileResponse(ROOT / "index.html")
 
 
 @app.get("/manifest.webmanifest")
 async def manifest():
-    return FileResponse(ROOT / "manifest.webmanifest", media_type="application/manifest+json")
+    path = ROOT / "dist" / "manifest.webmanifest" if (ROOT / "dist" / "manifest.webmanifest").exists() else ROOT / "manifest.webmanifest"
+    return FileResponse(path, media_type="application/manifest+json")
 
 
 @app.get("/sw.js")
 async def service_worker():
-    return FileResponse(ROOT / "sw.js", media_type="application/javascript")
+    path = ROOT / "dist" / "sw.js" if (ROOT / "dist" / "sw.js").exists() else ROOT / "sw.js"
+    return FileResponse(path, media_type="application/javascript")
 
 
 @app.get("/api/config")
