@@ -310,7 +310,7 @@ def create_session(user_id: int) -> str:
 
 
 def start_session(response: Response, user_id: int):
-    response.set_cookie("session", create_session(user_id), httponly=True, samesite="lax", max_age=60 * 60 * 24 * SESSION_DAYS)
+    response.set_cookie("session", create_session(user_id), httponly=True, samesite="none", secure=True, max_age=60 * 60 * 24 * SESSION_DAYS)
 
 
 def usage_today(user_id: int) -> int:
