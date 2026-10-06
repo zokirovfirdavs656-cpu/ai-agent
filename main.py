@@ -751,7 +751,7 @@ async def chat(payload: ChatInput, session: str | None = Cookie(default=None)):
     parts = [{"text": payload.prompt}]
     if payload.file_data and payload.file_type:
         parts.append({"inline_data": {"mime_type": payload.file_type, "data": payload.file_data}})
-    model = os.getenv("GEMINI_MODEL", "gemini-pro")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
     try:
         async with httpx.AsyncClient(timeout=90) as client:
             response = await client.post(
