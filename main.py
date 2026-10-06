@@ -53,6 +53,7 @@ ALLOWED_ORIGINS = [
         "http://127.0.0.1:8000",
         "http://localhost:8000",
         "https://ai-agent-n9gf.onrender.com",
+        "https://meek-belekoy-2c3ae6.netlify.app",
     }
     if origin
 ]
@@ -62,7 +63,7 @@ app = FastAPI(title="Gemini Chat")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https?://(127\.0\.0\.1|localhost|.*\.onrender\.com):?\d*",
+    allow_origin_regex=r"https?://(127\.0\.0\.1|localhost|.*\.onrender\.com|.*\.netlify\.app):?\d*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
